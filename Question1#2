@@ -1,0 +1,91 @@
+# Question 1
+
+library(dplyr)
+library(lubridate)
+load("CodeChallenge2024.RData")
+#Step 1
+HAM_protect$ID <- as.character(HAM_protect$ID)
+HAM_sleep$ID <- as.character(HAM_sleep$ID)
+consent_date$ID <- as.character(consent_date$ID)
+#Step 2
+cols_to_convert <- c("ham_9_ag", "ham_11_soma", "ham_12_gi", "ham_13_gs", "ham_14_sex", "ham_15_hd", "ham_17_weight")
+HAM_protect[cols_to_convert] <- lapply(HAM_protect[cols_to_convert], as.numeric)
+#Step 3
+combined_df <- dplyr::bind_rows(HAM_protect, HAM_sleep)
+combined_df <- combined_df %>%
+  left_join(consent_date %>% select(ID, reg_condate_protect), by = c("ID" = "ID")) %>%
+  rename(consent_date = reg_condate_protect)
+# Step 4
+combined_df <- combined_df %>%
+  mutate(
+    consent_date = as.Date(consent_date),
+    bq_date = as.Date(bq_date)
+  ) %>%
+  mutate(
+    time_diff = abs(difftime(bq_date, consent_date + years(1), units = "days"))
+  )
+# Step 5 Filter to 1 year
+combined_df <- combined_df %>%
+  group_by(ID) %>%
+  slice_min(time_diff, with_ties = FALSE) %>%
+  ungroup()
+#Step 6 Calculate the ham scores
+combined_df <- combined_df %>%
+  rowwise() %>%
+  mutate(
+    ham_score = sum(c_across(starts_with("ham_") & !matches("ham_3[abcde]")), na.rm = TRUE)
+  ) %>%
+  ungroup()
+#Step 7 compute the mean and latest
+final_df <- combined_df %>%
+  group_by(ID) %>%
+  summarise(
+    mean_ham_score = mean(ham_score, na.rm = TRUE),
+    latest_score = max(ham_score, na.rm = TRUE)
+  )
+#step 8 save the file 
+write.csv(final_df, "final_df.csv", row.names = FALSE)
+
+# Question 2 
+library(dplyr)
+library(ggplot2)
+str(recruitment_data)
+recruitment_data <- recruitment_data %>%
+  mutate(
+    Source = as.factor(Source),
+    Gender = as.factor(Gender),
+    Group = as.factor(Group),
+    Age = as.numeric(Age)
+  )
+
+# 1 Total Participants by Source
+ggplot(recruitment_data, aes(x = Source)) +
+  geom_bar(fill = "skyblue") +
+  labs(title = "Total Participants by Source",
+       x = "Source",
+       y = "Number of Participants") +
+  theme_minimal()
+
+# 2 Age Distribution of Participants
+ggplot(recruitment_data, aes(x = Age)) +
+  geom_histogram(binwidth = 5, fill = "lightgreen", color = "black") +
+  labs(title = "Age Distribution of Participants",
+       x = "Age",
+       y = "Frequency") +
+  theme_minimal()
+
+# 3 Participants by Gender
+ggplot(recruitment_data, aes(x = Gender)) +
+  geom_bar(fill = "pink") +
+  labs(title = "Participants by Gender",
+       x = "Gender",
+       y = "Number of Participants") +
+  theme_minimal()
+
+# 4 Participants by Group
+ggplot(recruitment_data, aes(x = Group)) +
+  geom_bar(fill = "purple") +
+  labs(title = "Participants by Group",
+       x = "Group",
+       y = "Number of Participants") +
+  theme_minimal()
