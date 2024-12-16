@@ -2,19 +2,24 @@
 
 library(dplyr)
 library(lubridate)
+
 load("CodeChallenge2024.RData")
+
 #Step 1 converts columns to character 
 HAM_protect$ID <- as.character(HAM_protect$ID)
 HAM_sleep$ID <- as.character(HAM_sleep$ID)
 consent_date$ID <- as.character(consent_date$ID)
+
 #Step 2 Converts specific HAM variables from character to numeric to calculate scores
 cols_to_convert <- c("ham_9_ag", "ham_11_soma", "ham_12_gi", "ham_13_gs", "ham_14_sex", "ham_15_hd", "ham_17_weight")
 HAM_protect[cols_to_convert] <- lapply(HAM_protect[cols_to_convert], as.numeric)
+
 #Step 3 HAM datasets from two sources and add consent dates
 combined_df <- dplyr::bind_rows(HAM_protect, HAM_sleep)
 combined_df <- combined_df %>%
   left_join(consent_date %>% select(ID, reg_condate_protect), by = c("ID" = "ID")) %>%
   rename(consent_date = reg_condate_protect)
+
 # Check for missing consent dates after the join
 missing_dates <- combined_df %>% filter(is.na(consent_date))
 if (nrow(missing_dates) > 0) {
@@ -26,6 +31,7 @@ combined_df <- combined_df %>%
   group_by(ID) %>%
   slice_min(time_diff, with_ties = FALSE) %>%
   ungroup()
+
 # Step 4
 combined_df <- combined_df %>%
   mutate(
@@ -35,11 +41,13 @@ combined_df <- combined_df %>%
   mutate(
     time_diff = abs(difftime(bq_date, consent_date + years(1), units = "days"))
   )
+
 # Step 5 Filter to 1 year
 combined_df <- combined_df %>%
   group_by(ID) %>%
   slice_min(time_diff, with_ties = FALSE) %>%
   ungroup()
+
 #Step 6 Calculate the ham scores
 combined_df <- combined_df %>%
   rowwise() %>%
@@ -47,19 +55,23 @@ combined_df <- combined_df %>%
     ham_score = sum(c_across(starts_with("ham_") & !matches("ham_3[abcde]")), na.rm = TRUE)
   ) %>%
   ungroup()
-#Step 7 compute the mean and latest
+
+#Step 7 compute the mean and latest score
 final_df <- combined_df %>%
   group_by(ID) %>%
   summarise(
     mean_ham_score = mean(ham_score, na.rm = TRUE),
     latest_score = max(ham_score, na.rm = TRUE)
   )
+
 #step 8 save the file 
 write.csv(final_df, "final_df.csv", row.names = FALSE)
 
 # Question 2 
+
 library(dplyr)
 library(ggplot2)
+
 str(recruitment_data)
 recruitment_data <- recruitment_data %>%
   mutate(
